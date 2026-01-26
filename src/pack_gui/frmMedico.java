@@ -13,22 +13,24 @@ public class frmMedico extends javax.swing.JFrame {
     private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(frmMedico.class.getName());
     
     private String nombreMedico;
+    private String idMedico;
+    
     
         /**
      * Creates new form frmMedic
      */    
     
     public frmMedico() {
-        this("Dr. Médico");
+        this("Dr. Médico", "M001");
     }
     
-    public frmMedico(String nombreMedico) {
+    public frmMedico(String nombreMedico, String idMedico) {
         this.nombreMedico = nombreMedico;
+        this.idMedico = idMedico;
         initComponents();
         lBienvenida.setText("Bienvenido, " + nombreMedico);
-        cargarDatosEjemplo();
+        cargarDatosCitas();
     }
-
 
 
     /**
@@ -58,6 +60,7 @@ public class frmMedico extends javax.swing.JFrame {
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Sistema Médico");
         setPreferredSize(new java.awt.Dimension(950, 650));
+        setResizable(false);
         getContentPane().setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
 
         pEncabezadoM.setBackground(new java.awt.Color(70, 130, 180));
@@ -173,7 +176,7 @@ public class frmMedico extends javax.swing.JFrame {
         btnVerDetalles.setFocusPainted(false);
         btnVerDetalles.setPreferredSize(new java.awt.Dimension(100, 35));
         btnVerDetalles.addActionListener(this::btnVerDetallesActionPerformed);
-        pCitasAtendidas.add(btnVerDetalles, new org.netbeans.lib.awtextra.AbsoluteConstraints(800, 380, 110, -1));
+        pCitasAtendidas.add(btnVerDetalles, new org.netbeans.lib.awtextra.AbsoluteConstraints(780, 380, 130, -1));
 
         tabpCitasMedicas.addTab("Citas Atendidas", pCitasAtendidas);
 
@@ -212,27 +215,95 @@ public class frmMedico extends javax.swing.JFrame {
     }//GEN-LAST:event_btnCerrarSesionActionPerformed
 
     
-    private void cargarDatosEjemplo() {
-        // Datos de ejemplo para Citas Agendadas
-        javax.swing.table.DefaultTableModel modelo1 = 
-            (javax.swing.table.DefaultTableModel) tablaCitasAgendadas.getModel();
-        modelo1.addRow(new Object[]{"C001", "2026-01-18", "09:00", "Juan Pérez", "Chequeo general", "Agendada"});
-        modelo1.addRow(new Object[]{"C002", "2026-01-18", "10:30", "María García", "Dolor abdominal", "Agendada"});
-        modelo1.addRow(new Object[]{"C003", "2026-01-19", "14:00", "Carlos López", "Control presión", "Agendada"});
+    private void cargarDatosCitas() {
+    javax.swing.table.DefaultTableModel modeloAgendadas = 
+        (javax.swing.table.DefaultTableModel) tablaCitasAgendadas.getModel();
+    javax.swing.table.DefaultTableModel modeloAtendidas = 
+        (javax.swing.table.DefaultTableModel) tablaCitasAtendidas.getModel();
+
+    modeloAgendadas.setRowCount(0);
+    modeloAtendidas.setRowCount(0);
+
+    java.io.File archivo = new java.io.File("citas.csv");
+    if (!archivo.exists()) return;
+
+    try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(archivo))) {
+        String linea = br.readLine(); // Encabezado
         
-        // Datos de ejemplo para Citas Atendidas
-        javax.swing.table.DefaultTableModel modelo2 = 
-            (javax.swing.table.DefaultTableModel) tablaCitasAtendidas.getModel();
-        modelo2.addRow(new Object[]{"C100", "2026-01-15", "09:00", "Pedro Sánchez", "Dolor cabeza", "Atendida"});
-        modelo2.addRow(new Object[]{"C101", "2026-01-16", "15:00", "Laura Fernández", "Control diabetes", "Atendida"});
+        while ((linea = br.readLine()) != null) {
+            if (linea.trim().isEmpty()) continue;
+            String[] datos = linea.split(",");
+
+            if (datos.length >= 9) {
+                String idCita = datos[0];
+                String nombrePaciente = datos[2];
+                String fecha = datos[3];
+                String hora = datos[4];
+                String nombreMedicoCita = datos[5];
+                String idMedicoCita = datos[6];
+                String motivo = datos[7];
+                String estado = datos[8];
+
+                // Comparar por ID del médico
+                if (idMedicoCita.equals(this.idMedico)) {
+                    Object[] fila = {idCita, fecha, hora, nombrePaciente, motivo, estado};
+
+                    if (estado.equals("Agendada")) {
+                        modeloAgendadas.addRow(fila);
+                    } else if (estado.equals("Atendida") || estado.equals("No se presentó")) {
+                        modeloAtendidas.addRow(fila);
+                    }
+                }
+            }
+        }
+    } catch (java.io.IOException e) {
+        System.err.println("Error al cargar citas: " + e.getMessage());
     }
+    }
+    
+    private void actualizarEstadoCitaEnCSV(String idCita, String nuevoEstado) {
+        java.io.File archivo = new java.io.File("citas.csv");
+        if (!archivo.exists()) return;
+
+        java.util.List<String> lineas = new java.util.ArrayList<>();
+
+        try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(archivo))) {
+            String linea = br.readLine(); 
+            lineas.add(linea);
+
+            while ((linea = br.readLine()) != null) {
+                String[] datos = linea.split(",");
+                if (datos[0].equals(idCita)) {
+                    if (datos.length >= 9) {
+                        datos[8] = nuevoEstado;
+                }
+                    lineas.add(String.join(",", datos));
+                } else {
+                    lineas.add(linea);
+                }
+            }
+        } catch (java.io.IOException e) {
+            System.err.println("Error al leer citas: " + e.getMessage());
+            return;
+        }
+
+        // Reescribir el archivo
+        try (java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(archivo))) {
+            for (String linea : lineas) {
+                pw.println(linea);
+            }
+        } catch (java.io.IOException e) {
+            System.err.println("Error al actualizar citas: " + e.getMessage());
+        }
+    }
+    
     
     private void cargarCitasAgendadas() {
         javax.swing.JOptionPane.showMessageDialog(this, "Citas actualizadas");
     }
     
     private void atenderCita() {
- int fila = tablaCitasAgendadas.getSelectedRow();
+    int fila = tablaCitasAgendadas.getSelectedRow();
     if (fila == -1) {
         javax.swing.JOptionPane.showMessageDialog(this, "Seleccione una cita para atender");
         return;
@@ -249,27 +320,25 @@ public class frmMedico extends javax.swing.JFrame {
     ventana.addWindowListener(new java.awt.event.WindowAdapter() {
         @Override
         public void windowClosed(java.awt.event.WindowEvent e) {
-            // Solo mover la cita si fue atendida
             if (ventana.isCitaAtendida()) {
-                // Obtener los datos de la fila
                 Object[] datosCita = new Object[6];
                 for (int i = 0; i < 6; i++) {
                     datosCita[i] = tablaCitasAgendadas.getValueAt(fila, i);
                 }
-                
-                // Cambiar el estado
-                datosCita[5] = ventana.getEstadoCita(); // "Atendida" o "No se presentó"
-                
-                // Mover a la tabla de atendidas
+
+                datosCita[5] = ventana.getEstadoCita();
+
+
+                actualizarEstadoCitaEnCSV(idCita, ventana.getEstadoCita());
+
                 javax.swing.table.DefaultTableModel modeloAtendidas = 
                     (javax.swing.table.DefaultTableModel) tablaCitasAtendidas.getModel();
                 modeloAtendidas.addRow(datosCita);
-                
-                // Eliminar de la tabla de agendadas
+
                 javax.swing.table.DefaultTableModel modeloAgendadas = 
                     (javax.swing.table.DefaultTableModel) tablaCitasAgendadas.getModel();
                 modeloAgendadas.removeRow(fila);
-                
+
                 javax.swing.JOptionPane.showMessageDialog(frmMedico.this, 
                     "Cita actualizada correctamente");
             }
@@ -304,12 +373,9 @@ public class frmMedico extends javax.swing.JFrame {
         "Confirmar", javax.swing.JOptionPane.YES_NO_OPTION);
     
     if (respuesta == javax.swing.JOptionPane.YES_OPTION) {
-        // Crear y mostrar ventana de login
         frmlogin login = new frmlogin();
         login.setVisible(true);
         login.setLocationRelativeTo(null);
-        
-        // Cerrar la ventana actual de médico
         this.dispose();
     }
     }

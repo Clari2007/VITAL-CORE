@@ -54,6 +54,7 @@ public class frmlogin extends javax.swing.JFrame {
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Login-Vital Core");
+        setResizable(false);
 
         pFondoLogin.setBackground(java.awt.SystemColor.control);
 
@@ -215,20 +216,30 @@ public class frmlogin extends javax.swing.JFrame {
         switch (typeUser) {
             case "doctor":
                 JOptionPane.showMessageDialog(this, "Bienvenido, Doctor. Sus consultas del día están listas.");
-                frmMedico ventanaMedico = new frmMedico("Dr. " + nombreUsuario);
+                String idMedico = "";
+                try {
+                    String[] partesCorreo = user.split("@")[0].split("_");
+                    if (partesCorreo.length > 0) {
+                        idMedico = partesCorreo[0];
+                    }
+                } catch (Exception e) {
+                    idMedico = "default"; 
+                }
+                frmMedico ventanaMedico = new frmMedico("Dr. " + nombreUsuario, idMedico);
                 ventanaMedico.setVisible(true);
                 ventanaMedico.setLocationRelativeTo(null);
                 this.dispose();
                 break;
             case "paciente":
                 JOptionPane.showMessageDialog(this, "Hola. Aquí puedes revisar tus citas médicas y recetas.");
-                frmPaciente paciente = new frmPaciente();
+                String idPaciente = user;
+                frmPaciente paciente = new frmPaciente(nombreUsuario, user);
                 paciente.setVisible(true);
                 this.setVisible(false);
                 break;
             case "farmaceutico":
                 JOptionPane.showMessageDialog(this, "Acceso concedido. Inventario de farmacia disponible.");
-                frmFarmaceutico farm = new frmFarmaceutico();
+                frmFarmaceutico farm = new frmFarmaceutico(nombreUsuario);
                 farm.setVisible(true);
                 this.setVisible(false);
                 break;
@@ -281,6 +292,7 @@ public class frmlogin extends javax.swing.JFrame {
             System.err.println("Error al cargar: " + e.getMessage());
         }
     }
+    
     
     public static void main(String args[]) {
         /* Set the Nimbus look and feel */

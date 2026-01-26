@@ -52,6 +52,7 @@ public class frmregistro extends javax.swing.JFrame {
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Registro-Vital Core");
+        setResizable(false);
 
         pRegistro.setBackground(java.awt.SystemColor.control);
 
@@ -190,6 +191,35 @@ public class frmregistro extends javax.swing.JFrame {
         }
     }
     
+    private String capitalizarTexto(String texto) {
+    if (texto == null || texto.trim().isEmpty()) {
+        return texto;
+    }
+    
+    texto = texto.trim();
+    
+    String[] palabras = texto.split("\\s+");
+    StringBuilder resultado = new StringBuilder();
+    
+    for (int i = 0; i < palabras.length; i++) {
+        String palabra = palabras[i];
+        
+        if (palabra.length() > 0) {
+
+            resultado.append(palabra.substring(0, 1).toUpperCase());
+            if (palabra.length() > 1) {
+                resultado.append(palabra.substring(1).toLowerCase());
+            }
+
+            if (i < palabras.length - 1) {
+                resultado.append(" ");
+            }
+        }
+    }
+    
+    return resultado.toString();
+}
+    
     private void cargarDesdeCSV() {
         java.io.File archivo = new java.io.File("usuarios.csv");
         if (!archivo.exists()) {
@@ -231,6 +261,39 @@ public class frmregistro extends javax.swing.JFrame {
         }
     }
     
+    private void guardarMedicoEnCSV(String nombreMedico, String idMedico) {
+        try {
+            java.io.File archivo = new java.io.File("medicos.csv");
+            boolean archivoExiste = archivo.exists();
+
+            try (java.io.FileWriter fw = new java.io.FileWriter(archivo, true);
+                 java.io.PrintWriter pw = new java.io.PrintWriter(fw)) {
+
+                if (!archivoExiste) {
+                    pw.println("NOMBRE,ID_MEDICO");
+                }
+
+                pw.println(nombreMedico + "," + idMedico);
+            }
+        } catch (java.io.IOException e) {
+            System.err.println("Error al guardar médico: " + e.getMessage());
+        }
+    }
+    
+    private String obtenerIdMedico(String usuarioMedico) {
+    String idMedico = "";
+    try {
+        String parteUsuario = usuarioMedico.split("@")[0]; 
+        String[] partes = parteUsuario.split("_");
+        if (partes.length > 0) {
+            idMedico = partes[0]; 
+        }
+    } catch (Exception e) {
+        System.err.println("Error al extraer ID médico: " + e.getMessage());
+    }
+    return idMedico;
+}
+    
     private void cTipoUsuarioActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_cTipoUsuarioActionPerformed
         // TODO add your handling code here:
     }//GEN-LAST:event_cTipoUsuarioActionPerformed
@@ -245,41 +308,75 @@ public class frmregistro extends javax.swing.JFrame {
 
     private void bRegistrarUsuarioMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_bRegistrarUsuarioMouseClicked
 
-        String nombre = tNombre.getText().trim();
-        String apellido = tApellido.getText().trim();
-        String tipo = cTipoUsuario.getSelectedItem().toString();
-        String password = new String (pContrasena1.getPassword());  //Aquí se encontraba el error al intentar transformar a String un arreglo de caracteres dierctamente
-        //Se propone un requerimiento de verificación básico para asegurarse que las personas con credenciales de médico sean las correctas
-        String claveFarm = "f4rM4c3ut1c0.5512";
-        String claveMed = "m3d1C04325";
-if (nombre.isEmpty() || apellido.isEmpty() || password.isEmpty() || tipo.equals("Seleccionar")) {
-            javax.swing.JOptionPane.showMessageDialog(this, "Debe completar todos los campos.");
+    String nombre = tNombre.getText().trim();
+    String apellido = tApellido.getText().trim();
+    String tipo = cTipoUsuario.getSelectedItem().toString();
+    String password = new String(pContrasena1.getPassword());
+    String claveFarm = "f4rM4c3ut1c0.5512";
+    String claveMed = "m3d1C04325";
+    
+    if (nombre.isEmpty() || apellido.isEmpty() || password.isEmpty() || tipo.equals("Seleccionar")) {
+        javax.swing.JOptionPane.showMessageDialog(this, "Debe completar todos los campos.");
+        return;
+    }
+    
+    String nombreCapitalizado = capitalizarTexto(nombre);
+    String apellidoCapitalizado = capitalizarTexto(apellido);
+    
+    if (tipo.equals("Doctor")) {
+        String userCodeMed = JOptionPane.showInputDialog(this, 
+            "Ingrese el código de verificación correspondiente", 
+            "VERIFICADOR DE IDENTIDAD", 
+            JOptionPane.QUESTION_MESSAGE).toString();
+        if (!userCodeMed.equals(claveMed)) {
+            javax.swing.JOptionPane.showMessageDialog(this, "La clave ingresada es incorrecta");
             return;
         }
-        if (tipo.equals("Doctor")){
-            String userCodeMed= JOptionPane.showInputDialog(this, "Ingrese el código de verificación correspondiente", "VERIFICADOR DE IDENTIDAD",JOptionPane.QUESTION_MESSAGE).toString();
-            if (!userCodeMed.equals(claveMed)){
-                javax.swing.JOptionPane.showMessageDialog(this, "La clave ingresada es incorrecta");
-                return;
-            }
-        } else if(tipo.equals("Farmaceutico")){
-            String userCodeFarm= JOptionPane.showInputDialog(this, "Ingrese el código de verificación correspondiente", "VERIFICADOR DE IDENTIDAD",JOptionPane.QUESTION_MESSAGE).toString();
-            if (!userCodeFarm.equals(claveFarm)){
-                javax.swing.JOptionPane.showMessageDialog(this, "La clave ingresada es incorrecta");
-                return;
-            }
+    } else if (tipo.equals("Farmaceutico")) {
+        String userCodeFarm = JOptionPane.showInputDialog(this, 
+            "Ingrese el código de verificación correspondiente", 
+            "VERIFICADOR DE IDENTIDAD", 
+            JOptionPane.QUESTION_MESSAGE).toString();
+        if (!userCodeFarm.equals(claveFarm)) {
+            javax.swing.JOptionPane.showMessageDialog(this, "La clave ingresada es incorrecta");
+            return;
         }
+    }
 
-        String usuarioID = (nombre.substring(0, 1) + "." + apellido + "_" + tipo + "@gestionmedica.gob.ec").toLowerCase();
-        String claveEncriptada = encriptar(password);
+    String apellidoBase = apellido;
+    String usuarioBase = (nombre.substring(0, 1) + "." + apellidoBase + "_" + tipo + "@gestionmedica.gob.ec").toLowerCase();
+    String usuarioID = usuarioBase;
+    
+    int contador = 1;
+    while (mapaUsuarios.containsKey(usuarioID)) {
+        String apellidoConNumero = apellidoBase + String.format("%02d", contador);
+        usuarioID = (nombre.substring(0, 1) + "." + apellidoConNumero + "_" + tipo + "@gestionmedica.gob.ec").toLowerCase();
+        contador++;
+    }
 
-        mapaUsuarios.put(usuarioID, claveEncriptada);
-        guardarEnCSV();
-        javax.swing.JOptionPane.showMessageDialog(this, "Estimado, el usuario generado para su cuenta es:\t" + usuarioID);
-        tNombre.setText("");
-        tApellido.setText("");
-        pContrasena1.setText("");
-        cTipoUsuario.setSelectedIndex(0);
+    String claveEncriptada = encriptar(password);
+    mapaUsuarios.put(usuarioID, claveEncriptada);
+    guardarEnCSV();
+    
+
+    if (tipo.equals("Doctor")) {
+        String idMedico = obtenerIdMedico(usuarioID);
+        guardarMedicoEnCSV("Dr. " + nombreCapitalizado + " " + apellidoCapitalizado, idMedico);
+    }
+    
+    if (!usuarioID.equals(usuarioBase)) {
+        javax.swing.JOptionPane.showMessageDialog(this, 
+            "El usuario base ya existía.\n" +
+            "Usuario generado para su cuenta es:\n" + usuarioID);
+    } else {
+        javax.swing.JOptionPane.showMessageDialog(this, 
+            "Estimado, el usuario generado para su cuenta es:\n" + usuarioID);
+    }
+    
+    tNombre.setText("");
+    tApellido.setText("");
+    pContrasena1.setText("");
+    cTipoUsuario.setSelectedIndex(0);
     }//GEN-LAST:event_bRegistrarUsuarioMouseClicked
 
     private void tNombreMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_tNombreMouseClicked

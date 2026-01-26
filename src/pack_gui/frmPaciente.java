@@ -13,6 +13,9 @@ import java.util.*;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.JOptionPane;
 import pack_gui.frmlogin;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.JList;
+import java.awt.Component;
 
 /**
  *
@@ -40,8 +43,10 @@ public class frmPaciente extends javax.swing.JFrame {
         this.misCitas = new java.util.ArrayList<>();
     
         initComponents();
-        cargarDatosEjemplo();
         lBienvenidaP.setText("Bienvenido/a, " + nombrePaciente);
+        cargarMedicosDesdeCSV();
+        cargarDatos();
+        cargarMedicinasDisponibles();
 }
 
     private void cargarMedicinasDisponibles() {
@@ -52,7 +57,7 @@ public class frmPaciente extends javax.swing.JFrame {
         if (!archivo.exists()) return;
 
         try (BufferedReader br = new BufferedReader(new FileReader(archivo))) {
-            String linea = br.readLine(); // Saltar encabezado (MEDICINA,STOCK)
+            String linea = br.readLine(); // Saltar encabezado
             while ((linea = br.readLine()) != null) {
                 if (linea.trim().isEmpty()) continue;
                 String[] datos = linea.split(",");
@@ -60,7 +65,6 @@ public class frmPaciente extends javax.swing.JFrame {
                     String nombre = datos[0];
                     int stock = Integer.parseInt(datos[1].trim());
 
-                    // REQUERIMIENTO: Solo mostrar si el stock es mayor a 0
                     if (stock > 0) {
                         cbMedicamento.addItem(nombre);
                     }
@@ -71,10 +75,41 @@ public class frmPaciente extends javax.swing.JFrame {
         }
     }
 
-    // Desconteo en el archivo de inventario
+
+    private void guardarPedidoMedicamento(String medicamento, int cantidad) {
+    try {
+        File archivo = new File("pedidos_medicamentos.csv");
+        boolean archivoExiste = archivo.exists();
+        
+        try (FileWriter fw = new FileWriter(archivo, true);
+             PrintWriter pw = new PrintWriter(fw)) {
+            
+            if (!archivoExiste) {
+                pw.println("ID_PACIENTE,NOMBRE_PACIENTE,MEDICAMENTO,CANTIDAD,FECHA,ESTADO");
+            }
+            
+            java.time.LocalDate fechaActual = java.time.LocalDate.now();
+            String fecha = String.format("%02d/%02d/%d", 
+                fechaActual.getDayOfMonth(), 
+                fechaActual.getMonthValue(), 
+                fechaActual.getYear());
+            
+            pw.println(String.format("%s,%s,%s,%d,%s,%s",
+                this.idPaciente,
+                this.nombrePaciente,
+                medicamento,
+                cantidad,
+                fecha,
+                "Pendiente"));
+        }
+    } catch (IOException e) {
+        System.err.println("Error al guardar pedido: " + e.getMessage());
+    }
+}
+    
     private void procesarPedido() {
         String medicinaSeleccionada = (String) cbMedicamento.getSelectedItem();
-        
+
         if (medicinaSeleccionada == null || medicinaSeleccionada.equals("Seleccionar Medicamento...")) {
             JOptionPane.showMessageDialog(this, "Por favor, seleccione un medicamento.");
             return;
@@ -94,7 +129,6 @@ public class frmPaciente extends javax.swing.JFrame {
             Map<String, Integer> inventario = new LinkedHashMap<>();
             boolean exito = false;
 
-            // 1. Leer el inventario actual
             try (BufferedReader br = new BufferedReader(new FileReader(archivo))) {
                 String cabecera = br.readLine();
                 String l;
@@ -116,17 +150,24 @@ public class frmPaciente extends javax.swing.JFrame {
                 }
             }
 
-            // Guardado de información tras validación
             if (exito) {
+                // Actualizar inventario
                 try (PrintWriter pw = new PrintWriter(new FileWriter(archivo))) {
                     pw.println("MEDICINA,STOCK");
                     for (Map.Entry<String, Integer> entry : inventario.entrySet()) {
                         pw.println(entry.getKey() + "," + entry.getValue());
                     }
                 }
-                JOptionPane.showMessageDialog(this, "Pedido solicitado con éxito.");
+
+                guardarPedidoMedicamento(medicinaSeleccionada, cantidadPedida);
+
+                JOptionPane.showMessageDialog(this, 
+                    "Pedido registrado con éxito.\n\n" +
+                    "Medicamento: " + medicinaSeleccionada + "\n" +
+                    "Cantidad: " + cantidadPedida + "\n" +
+                    "Paciente: " + this.nombrePaciente);
+
                 txtCantidad.setText("");
-                // Eliminación dentro del combo box si su valor llega a 0
                 cargarMedicinasDisponibles();
             }
 
@@ -136,6 +177,84 @@ public class frmPaciente extends javax.swing.JFrame {
             JOptionPane.showMessageDialog(this, "Error de archivo: " + e.getMessage());
         }
     }
+    
+    private void cargarMedicosDesdeCSV() {
+    cmbMedico.removeAllItems();
+    cmbMedico.addItem("Seleccionar médico");
+    
+    java.io.File archivo = new java.io.File("medicos.csv");
+    if (!archivo.exists()) {
+        try (java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(archivo))) {
+            pw.println("NOMBRE,ID_MEDICO");
+            pw.println("Dr. Estéfano Chávez,M001");
+            pw.println("Dra. Claris Delgado,M002");
+        } catch (java.io.IOException e) {
+            System.err.println("Error al crear archivo de médicos");
+        }
+    }
+    
+    try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(archivo))) {
+        String linea = br.readLine(); // Encabezado
+        while ((linea = br.readLine()) != null) {
+            if (linea.trim().isEmpty()) continue;
+            String[] datos = linea.split(",");
+            if (datos.length >= 2) {
+                cmbMedico.addItem(datos[0].trim() + "|" + datos[1].trim());
+            }
+        }
+    } catch (java.io.IOException e) {
+        System.err.println("Error al cargar médicos: " + e.getMessage());
+    }
+    cmbMedico.setRenderer(new DefaultListCellRenderer() {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, 
+                                                     int index, boolean isSelected, boolean cellHasFocus) {
+            super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            
+            if (value != null) {
+                String texto = value.toString();
+                if (texto.contains("|")) {
+                    String[] partes = texto.split("\\|");
+                    setText(partes[0].trim()); 
+                } else {
+                    setText(texto);
+                }
+            }
+            
+            return this;
+        }
+    });
+    }
+    
+
+
+    
+    private void guardarCitaEnCSV(String idCita, String idPaciente, String nombrePaciente, 
+                               String fecha, String hora, String medicoCompleto, String motivo, String estado) {
+    String[] medicoData = medicoCompleto.split("\\|");
+    String nombreMedico = medicoData[0];
+    String idMedico = medicoData.length > 1 ? medicoData[1] : "";
+    
+    try {
+        java.io.File archivo = new java.io.File("citas.csv");
+        boolean archivoExiste = archivo.exists();
+        
+        try (java.io.FileWriter fw = new java.io.FileWriter(archivo, true);
+             java.io.PrintWriter pw = new java.io.PrintWriter(fw)) {
+            
+            if (!archivoExiste) {
+                pw.println("ID_CITA,ID_PACIENTE,NOMBRE_PACIENTE,FECHA,HORA,NOMBRE_MEDICO,ID_MEDICO,MOTIVO,ESTADO");
+            }
+            
+            pw.println(String.format("%s,%s,%s,%s,%s,%s,%s,%s,%s",
+                idCita, idPaciente, nombrePaciente, fecha, hora, 
+                nombreMedico, idMedico, motivo, estado));
+        }
+    } catch (java.io.IOException e) {
+        JOptionPane.showMessageDialog(this, "Error al guardar cita: " + e.getMessage());
+    }
+}
+    
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -169,7 +288,6 @@ public class frmPaciente extends javax.swing.JFrame {
         panelMisCitas = new javax.swing.JPanel();
         scrpCitas = new javax.swing.JScrollPane();
         tablaMisCitas = new javax.swing.JTable();
-        btnRefrescar = new javax.swing.JButton();
         btnReprogramar = new javax.swing.JButton();
         btnCancelarCita = new javax.swing.JButton();
         panelMedicamentos = new javax.swing.JPanel();
@@ -181,6 +299,7 @@ public class frmPaciente extends javax.swing.JFrame {
         bCerrarSesionP = new javax.swing.JButton();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+        setResizable(false);
         getContentPane().setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
 
         pEncabezadoP.setBackground(new java.awt.Color(70, 130, 180));
@@ -196,7 +315,7 @@ public class frmPaciente extends javax.swing.JFrame {
         lBienvenidaP.setForeground(new java.awt.Color(255, 255, 255));
         lBienvenidaP.setText("Bienvenido/a, Paciente");
         lBienvenidaP.setPreferredSize(new java.awt.Dimension(250, 30));
-        pEncabezadoP.add(lBienvenidaP, new org.netbeans.lib.awtextra.AbsoluteConstraints(650, 30, -1, -1));
+        pEncabezadoP.add(lBienvenidaP, new org.netbeans.lib.awtextra.AbsoluteConstraints(510, 30, 430, -1));
 
         getContentPane().add(pEncabezadoP, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 0, -1, -1));
 
@@ -236,7 +355,7 @@ public class frmPaciente extends javax.swing.JFrame {
         lblHora.setText("Horario: ");
         panelAgendarCita.add(lblHora, new org.netbeans.lib.awtextra.AbsoluteConstraints(30, 105, -1, -1));
 
-        cmbHorario.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Seleccionar horario", "07:00 - 08:00", "08:00 - 09:00", "09:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00", "13:00 - 14:00", "14:00 - 15:00", "15:00 - 16:00" }));
+        cmbHorario.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Seleccionar horario", "07:00 - 08:00", "08:00 - 09:00", "09:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00", "14:00 - 15:00", "15:00 - 16:00" }));
         cmbHorario.setPreferredSize(new java.awt.Dimension(250, 25));
         panelAgendarCita.add(cmbHorario, new org.netbeans.lib.awtextra.AbsoluteConstraints(30, 125, -1, -1));
 
@@ -292,14 +411,14 @@ public class frmPaciente extends javax.swing.JFrame {
 
             },
             new String [] {
-                "ID", "Fecha", "Hora", "Médico", "Especialidad", "Motivo", "Estado"
+                "ID", "Fecha", "Hora", "Médico", "Motivo", "Estado"
             }
         ) {
             Class[] types = new Class [] {
-                java.lang.String.class, java.lang.String.class, java.lang.String.class, java.lang.String.class, java.lang.String.class, java.lang.String.class, java.lang.String.class
+                java.lang.String.class, java.lang.String.class, java.lang.String.class, java.lang.String.class, java.lang.String.class, java.lang.String.class
             };
             boolean[] canEdit = new boolean [] {
-                false, false, false, false, false, false, false
+                false, false, false, false, false, false
             };
 
             public Class getColumnClass(int columnIndex) {
@@ -314,15 +433,6 @@ public class frmPaciente extends javax.swing.JFrame {
         scrpCitas.setViewportView(tablaMisCitas);
 
         panelMisCitas.add(scrpCitas, new org.netbeans.lib.awtextra.AbsoluteConstraints(10, 10, -1, -1));
-
-        btnRefrescar.setBackground(new java.awt.Color(100, 149, 237));
-        btnRefrescar.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
-        btnRefrescar.setForeground(new java.awt.Color(255, 255, 255));
-        btnRefrescar.setText("Refrescar");
-        btnRefrescar.setFocusPainted(false);
-        btnRefrescar.setPreferredSize(new java.awt.Dimension(120, 35));
-        btnRefrescar.addActionListener(this::btnRefrescarActionPerformed);
-        panelMisCitas.add(btnRefrescar, new org.netbeans.lib.awtextra.AbsoluteConstraints(500, 420, -1, -1));
 
         btnReprogramar.setBackground(new java.awt.Color(255, 140, 0));
         btnReprogramar.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
@@ -344,6 +454,8 @@ public class frmPaciente extends javax.swing.JFrame {
 
         tabpPaciente.addTab("Mis citas", panelMisCitas);
 
+        panelMedicamentos.setBackground(new java.awt.Color(255, 255, 255));
+
         lMedicinaS.setText("Medicina a solicitar");
         panelMedicamentos.add(lMedicinaS);
 
@@ -353,6 +465,7 @@ public class frmPaciente extends javax.swing.JFrame {
         lCantidad.setText("Cantidad");
         panelMedicamentos.add(lCantidad);
 
+        txtCantidad.setPreferredSize(new java.awt.Dimension(100, 22));
         txtCantidad.addActionListener(this::txtCantidadActionPerformed);
         panelMedicamentos.add(txtCantidad);
 
@@ -377,7 +490,8 @@ public class frmPaciente extends javax.swing.JFrame {
 
     private void btnAgendarCitaActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnAgendarCitaActionPerformed
         // TODO add your handling code here:
-        String dia = txtDia.getText().trim();
+    // Validación de fecha
+    String dia = txtDia.getText().trim();
     String mes = txtMes.getText().trim();
     String anio = txtAnio.getText().trim();
     
@@ -386,7 +500,6 @@ public class frmPaciente extends javax.swing.JFrame {
         return;
     }
     
-    // Validar que sean números
     try {
         int diaNum = Integer.parseInt(dia);
         int mesNum = Integer.parseInt(mes);
@@ -414,7 +527,6 @@ public class frmPaciente extends javax.swing.JFrame {
         return;
     }
     
-    
     if (cmbMedico.getSelectedIndex() == 0) {
         JOptionPane.showMessageDialog(this, "Debe seleccionar un médico");
         return;
@@ -425,30 +537,39 @@ public class frmPaciente extends javax.swing.JFrame {
         return;
     }
     
-    // Crear la cita
+
     String idCita = "C" + String.format("%03d", misCitas.size() + 100);
     String fechaStr = String.format("%02d/%02d/%s", Integer.parseInt(dia), Integer.parseInt(mes), anio);
     String hora = cmbHorario.getSelectedItem().toString();
-    String medico = cmbMedico.getSelectedItem().toString();
+    
+
+    String medicoCompleto = cmbMedico.getSelectedItem().toString();
+    
+    String[] medicoPartes = medicoCompleto.split("\\|");
+    String nombreMedico = medicoPartes[0].trim(); 
+    
     String motivo = txtMotivo.getText().trim();
     
-    CitaPaciente nuevaCita = new CitaPaciente(idCita, fechaStr, hora, medico, motivo, "Agendada");
+    CitaPaciente nuevaCita = new CitaPaciente(idCita, fechaStr, hora, nombreMedico, motivo, "Agendada");
     misCitas.add(nuevaCita);
     
-    // Actualizar tabla
+    guardarCitaEnCSV(idCita, idPaciente, nombrePaciente, fechaStr, hora, medicoCompleto, motivo, "Agendada");
+    
     DefaultTableModel modelo = (DefaultTableModel) tablaMisCitas.getModel();
     modelo.addRow(new Object[]{
-        idCita, fechaStr, hora, medico, motivo, "Agendada"
+        idCita, fechaStr, hora, nombreMedico, motivo, "Agendada"
     });
     
+
     JOptionPane.showMessageDialog(this, 
         "Cita agendada exitosamente\n\n" +
         "ID: " + idCita + "\n" +
         "Fecha: " + fechaStr + "\n" +
         "Hora: " + hora + "\n" +
-        "Médico: " + medico,
+        "Médico: " + nombreMedico,
         "Cita Agendada", JOptionPane.INFORMATION_MESSAGE);
     
+
     limpiarFormulario();
     tabpPaciente.setSelectedIndex(1);    
     }//GEN-LAST:event_btnAgendarCitaActionPerformed
@@ -460,13 +581,13 @@ public class frmPaciente extends javax.swing.JFrame {
 
     private void btnCancelarCitaActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnCancelarCitaActionPerformed
         // TODO add your handling code here:
-            int fila = tablaMisCitas.getSelectedRow();
+    int fila = tablaMisCitas.getSelectedRow();
     if (fila == -1) {
         JOptionPane.showMessageDialog(this, "Seleccione una cita para cancelar");
         return;
     }
     
-    String estado = (String) tablaMisCitas.getValueAt(fila, 6);
+    String estado = (String) tablaMisCitas.getValueAt(fila, 5);
     if (!estado.equals("Agendada")) {
         JOptionPane.showMessageDialog(this, "Solo puede cancelar citas agendadas");
         return;
@@ -477,21 +598,26 @@ public class frmPaciente extends javax.swing.JFrame {
         "Confirmar Cancelación", JOptionPane.YES_NO_OPTION);
     
     if (confirmacion == JOptionPane.YES_OPTION) {
-        tablaMisCitas.setValueAt("Cancelada", fila, 6);
+        tablaMisCitas.setValueAt("Cancelada", fila, 5); 
+        
         misCitas.get(fila).setEstado("Cancelada");
+        
+        String idCita = (String) tablaMisCitas.getValueAt(fila, 0);
+        actualizarEstadoCitaEnCSV(idCita, "Cancelada");
+        
         JOptionPane.showMessageDialog(this, "Cita cancelada exitosamente");
-    }   
+    }
     }//GEN-LAST:event_btnCancelarCitaActionPerformed
 
     private void btnReprogramarActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnReprogramarActionPerformed
         // TODO add your handling code here:
-            int fila = tablaMisCitas.getSelectedRow();
+    int fila = tablaMisCitas.getSelectedRow();
     if (fila == -1) {
         JOptionPane.showMessageDialog(this, "Seleccione una cita para reprogramar");
         return;
     }
     
-    String estado = (String) tablaMisCitas.getValueAt(fila, 6);
+    String estado = (String) tablaMisCitas.getValueAt(fila, 5);
     if (!estado.equals("Agendada")) {
         JOptionPane.showMessageDialog(this, "Solo puede reprogramar citas agendadas");
         return;
@@ -501,11 +627,6 @@ public class frmPaciente extends javax.swing.JFrame {
         "Para reprogramar, cancele esta cita y agende una nueva en la fecha deseada",
         "Reprogramar Cita", JOptionPane.INFORMATION_MESSAGE);
     }//GEN-LAST:event_btnReprogramarActionPerformed
-
-    private void btnRefrescarActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnRefrescarActionPerformed
-        // TODO add your handling code here:
-        JOptionPane.showMessageDialog(this, "Tabla actualizada");
-    }//GEN-LAST:event_btnRefrescarActionPerformed
 
     private void bCerrarSesionPActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_bCerrarSesionPActionPerformed
         // TODO add your handling code here:
@@ -538,16 +659,83 @@ public class frmPaciente extends javax.swing.JFrame {
     cmbMedico.setSelectedIndex(0);
     txtMotivo.setText("");
 }
-    private void cargarDatosEjemplo() {
+    private void cargarDatos() {
     DefaultTableModel modelo = (DefaultTableModel) tablaMisCitas.getModel();
-    modelo.addRow(new Object[]{
-        "C098", "25/01/2026", "09:00 - 10:00", "Dr. Estéfano Chávez", 
-        "Medicina General", "Chequeo anual", "Agendada"
-    });
-    modelo.addRow(new Object[]{
-        "C075", "15/01/2026", "10:00 - 11:00", "Dra. Claris Delgado", 
-        "Medicina General", "Dolor de cabeza", "Atendida"
-    });
+    modelo.setRowCount(0); // Limpiar tabla
+    
+    misCitas.clear();
+    
+    java.io.File archivo = new java.io.File("citas.csv");
+    if (!archivo.exists()) {
+        return;
+    }
+    
+    try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(archivo))) {
+        String linea = br.readLine(); // Saltar encabezado
+        
+        while ((linea = br.readLine()) != null) {
+            if (linea.trim().isEmpty()) continue;
+            String[] datos = linea.split(",");
+            
+            if (datos.length >= 9) {
+                String idCita = datos[0];
+                String idPacienteCSV = datos[1];
+                String nombrePaciente = datos[2];
+                String fecha = datos[3];
+                String hora = datos[4];
+                String medico = datos[5];
+                String idMedico = datos[6];
+                String motivo = datos[7]; 
+                String estado = datos[8];
+                
+
+                if (idPacienteCSV.equals(this.idPaciente)) {
+                    modelo.addRow(new Object[]{
+                        idCita, fecha, hora, medico, motivo, estado
+                    });
+                    
+                    CitaPaciente cita = new CitaPaciente(idCita, fecha, hora, medico, motivo, estado);
+                    misCitas.add(cita);
+                }
+            }
+        }
+    } catch (java.io.IOException e) {
+        System.err.println("Error al cargar citas: " + e.getMessage());
+    }
+}
+    private void actualizarEstadoCitaEnCSV(String idCita, String nuevoEstado) {
+        java.io.File archivo = new java.io.File("citas.csv");
+        if (!archivo.exists()) return;
+    
+        java.util.List<String> lineas = new java.util.ArrayList<>();
+    
+        try (java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(archivo))) {
+            String linea = br.readLine(); 
+            lineas.add(linea);
+        
+            while ((linea = br.readLine()) != null) {
+                String[] datos = linea.split(",");
+                if (datos[0].equals(idCita)) {
+                    if (datos.length >= 9) {
+                        datos[8] = nuevoEstado;
+                    }
+                    lineas.add(String.join(",", datos));
+                } else {
+                lineas.add(linea);
+                }
+            }
+        } catch (java.io.IOException e) {
+        System.err.println("Error al leer citas: " + e.getMessage());
+        return;
+    }
+    
+        try (java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(archivo))) {
+            for (String linea : lineas) {
+                pw.println(linea);
+            }
+        } catch (java.io.IOException e) {
+            System.err.println("Error al actualizar citas: " + e.getMessage());
+        }
 }
     
     /**
@@ -581,7 +769,6 @@ public class frmPaciente extends javax.swing.JFrame {
     private javax.swing.JButton btnAgendarCita;
     private javax.swing.JButton btnCancelarCita;
     private javax.swing.JButton btnLimpiarFormulario;
-    private javax.swing.JButton btnRefrescar;
     private javax.swing.JButton btnReprogramar;
     private javax.swing.JComboBox<String> cbMedicamento;
     private javax.swing.JComboBox<String> cmbHorario;

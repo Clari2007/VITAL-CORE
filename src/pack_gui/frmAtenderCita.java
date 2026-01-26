@@ -21,9 +21,9 @@ public class frmAtenderCita extends javax.swing.JFrame {
 
     private String idCita;
     private String nombrePaciente;
-    private List<String[]> medicinas; // [nombre, dosis, indicaciones]
-    private boolean citaAtendida = false; // Para saber si se guardó o canceló
-    private String estadoCita = ""; // "Atendida" o "No se presentó"
+    private List<String[]> medicinas; 
+    private boolean citaAtendida = false; 
+    private String estadoCita = "";
 
     
         /**
@@ -37,6 +37,82 @@ public class frmAtenderCita extends javax.swing.JFrame {
         lIdCita.setText("ID Cita: " + idCita);
         lPaciente.setText("Paciente: " + nombrePaciente);
     }
+    
+    private void generarArchivoConsulta() {
+    try {
+        String nombreArchivo = String.format("Consulta_%s_%s.txt", 
+            this.idCita, 
+            new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date()));
+        
+        try (java.io.PrintWriter pw = new java.io.PrintWriter(new java.io.FileWriter(nombreArchivo))) {
+            pw.println("═══════════════════════════════════════════════════════════");
+            pw.println("              REGISTRO DE CONSULTA MÉDICA");
+            pw.println("═══════════════════════════════════════════════════════════");
+            pw.println();
+            
+            pw.println("ID CITA: " + this.idCita);
+            pw.println("PACIENTE: " + this.nombrePaciente);
+            pw.println("FECHA DE REGISTRO: " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss").format(new java.util.Date()));
+            pw.println();
+            
+            pw.println("───────────────────────────────────────────────────────────");
+            pw.println("INFORMACIÓN CLÍNICA");
+            pw.println("───────────────────────────────────────────────────────────");
+            pw.println();
+            
+            pw.println("GRAVEDAD: " + cmbGravedad.getSelectedItem());
+            pw.println();
+            
+            pw.println("DIAGNÓSTICO:");
+            pw.println(txtDiagnostico.getText().trim());
+            pw.println();
+            
+            pw.println("TRATAMIENTO:");
+            pw.println(txtTratamiento.getText().trim());
+            pw.println();
+            
+            pw.println("DURACIÓN DEL TRATAMIENTO: " + spnDuracion.getValue() + " días");
+            pw.println();
+            
+            javax.swing.table.DefaultTableModel modelo = (javax.swing.table.DefaultTableModel) tablaMedicinas.getModel();
+            if (chkReceta.isSelected() && modelo.getRowCount() > 0) {
+                pw.println("───────────────────────────────────────────────────────────");
+                pw.println("PRESCRIPCIÓN DE MEDICAMENTOS");
+                pw.println("───────────────────────────────────────────────────────────");
+                pw.println();
+                
+                for (int i = 0; i < modelo.getRowCount(); i++) {
+                    String med = modelo.getValueAt(i, 0).toString();
+                    String dosis = modelo.getValueAt(i, 1).toString();
+                    String indic = modelo.getValueAt(i, 2).toString();
+                    
+                    pw.println((i + 1) + ". " + med);
+                    pw.println("   Dosis: " + dosis);
+                    pw.println("   Indicaciones: " + indic);
+                    pw.println();
+                }
+            } else {
+                pw.println("No se prescribieron medicamentos.");
+                pw.println();
+            }
+            
+            pw.println("═══════════════════════════════════════════════════════════");
+            pw.println("           Fin del Registro de Consulta");
+            pw.println("═══════════════════════════════════════════════════════════");
+        }
+        
+        javax.swing.JOptionPane.showMessageDialog(this, 
+            "Archivo generado exitosamente:\n" + nombreArchivo,
+            "Archivo Creado", 
+            javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            
+    } catch (java.io.IOException e) {
+        javax.swing.JOptionPane.showMessageDialog(this, 
+            "Error al generar el archivo: " + e.getMessage(),
+            "Error",
+            javax.swing.JOptionPane.ERROR_MESSAGE);
+    }
+}
 
     /**
      * This method is called from within the constructor to initialize the form.
@@ -80,7 +156,8 @@ public class frmAtenderCita extends javax.swing.JFrame {
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("Atender Cita");
-        setPreferredSize(new java.awt.Dimension(760, 800));
+        setPreferredSize(new java.awt.Dimension(760, 815));
+        setResizable(false);
         getContentPane().setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
 
         pEncabezadoACM.setBackground(new java.awt.Color(70, 130, 180));
@@ -246,7 +323,7 @@ public class frmAtenderCita extends javax.swing.JFrame {
         btnCancelar.setFocusPainted(false);
         btnCancelar.setPreferredSize(new java.awt.Dimension(131, 27));
         btnCancelar.addActionListener(this::btnCancelarActionPerformed);
-        getContentPane().add(btnCancelar, new org.netbeans.lib.awtextra.AbsoluteConstraints(380, 750, 100, 30));
+        getContentPane().add(btnCancelar, new org.netbeans.lib.awtextra.AbsoluteConstraints(370, 750, 100, 30));
 
         btnNoSePresento.setBackground(new java.awt.Color(255, 140, 0));
         btnNoSePresento.setFont(new java.awt.Font("Segoe UI", 1, 14)); // NOI18N
@@ -285,6 +362,26 @@ public class frmAtenderCita extends javax.swing.JFrame {
     
     if (medicamento.isEmpty() || dosis.isEmpty() || indicaciones.isEmpty()) {
         javax.swing.JOptionPane.showMessageDialog(this, "Complete todos los campos del medicamento");
+        return;
+    }
+    
+    // Validar que la dosis sea un número mayor a 1
+    try {
+        int valorDosis = Integer.parseInt(dosis);
+        if (valorDosis < 1) {
+            javax.swing.JOptionPane.showMessageDialog(this, 
+                "La dosis debe ser un número mayor o igual a 1", 
+                "Error de validación", 
+                javax.swing.JOptionPane.ERROR_MESSAGE);
+            txtDosis.requestFocus();
+            return;
+        }
+    } catch (NumberFormatException e) {
+        javax.swing.JOptionPane.showMessageDialog(this, 
+            "La dosis debe ser un número válido", 
+            "Error de validación", 
+            javax.swing.JOptionPane.ERROR_MESSAGE);
+        txtDosis.requestFocus();
         return;
     }
     
@@ -334,7 +431,6 @@ public class frmAtenderCita extends javax.swing.JFrame {
 
     private void btnGuardarActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnGuardarActionPerformed
         // TODO add your handling code here:
-    //Validación de datos completados
     if (txtDiagnostico.getText().trim().isEmpty()) {
         javax.swing.JOptionPane.showMessageDialog(this, "Debe ingresar un diagnóstico");
         return;
@@ -347,7 +443,6 @@ public class frmAtenderCita extends javax.swing.JFrame {
 
     String archivoRecetas = "recetas.csv";
     
-    //Mensaje de Exito
     StringBuilder mensaje = new StringBuilder("CONSULTA REGISTRADA\n\n");
     mensaje.append("Gravedad: ").append(cmbGravedad.getSelectedItem()).append("\n");
     mensaje.append("Duración: ").append(spnDuracion.getValue()).append(" días\n");
@@ -364,7 +459,6 @@ public class frmAtenderCita extends javax.swing.JFrame {
                 String dosis = modelo.getValueAt(i, 1).toString();
                 String indic = modelo.getValueAt(i, 2).toString();
                 
-                // Guardamos en el archivo recetas.csv
                 String linea = String.format("%s,%s,%s,%s,%s", 
                         this.idCita, this.nombrePaciente, med, dosis, "Pendiente");
                 bw.write(linea);
@@ -375,9 +469,10 @@ public class frmAtenderCita extends javax.swing.JFrame {
             }
         }
         
-        //Marcamos la cita como atendida
         citaAtendida = true;
         estadoCita = "Atendida";
+        
+        generarArchivoConsulta();
 
         javax.swing.JOptionPane.showMessageDialog(this, mensaje.toString(), 
             "Éxito", javax.swing.JOptionPane.INFORMATION_MESSAGE);
